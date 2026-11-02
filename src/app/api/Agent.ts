@@ -47,6 +47,22 @@ export const spinupDedicatedAgent = async (
   }
 }
 
+export const getAgentHealth = async (
+  orgId: string,
+): Promise<AxiosResponse | string> => {
+  const details = {
+    url: `${apiRoutes.organizations.root}/${orgId}${apiRoutes.Agent.checkAgentHealth}`,
+    config: getHeaderConfigs(),
+  }
+
+  try {
+    return await axiosGet(details)
+  } catch (error) {
+    const err = error as Error
+    return err?.message
+  }
+}
+
 export const setAgentConfigDetails = async (
   data: IDedicatedAgentConfiguration,
   orgId: string,
@@ -175,6 +191,26 @@ export const getDids = async (
 
   try {
     return await axiosGet(axiosPayload)
+  } catch (error) {
+    const err = error as Error
+    return err?.message
+  }
+}
+
+export const setPublicAgentEndpoint = async (
+  orgId: string,
+  publicEndpoint: string,
+): Promise<AxiosResponse | string> => {
+  const url = `${apiRoutes.organizations.root}/${orgId}${apiRoutes.Agent.publicEndpoint}`
+
+  const axiosPayload = {
+    url,
+    payload: { publicEndpoint },
+    config: getHeaderConfigs(),
+  }
+
+  try {
+    return await axiosPut(axiosPayload)
   } catch (error) {
     const err = error as Error
     return err?.message

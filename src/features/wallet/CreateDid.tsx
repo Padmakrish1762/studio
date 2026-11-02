@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { createDid, setPublicAgentEndpoint } from '@/app/api/Agent'
 import {
   didExamples,
   didOptionsMap,
@@ -31,9 +32,11 @@ import { DidMethod } from '@/common/enums'
 import PageContainer from '@/components/layout/page-container'
 import SetDomainValueInput from './SetDomainValueInput'
 import SetPrivateKeyValueInput from './SetPrivateKeyValue'
+import SetPublicEndpointPrompt from './SetPublicEndpointPrompt'
 import Stepper from '@/components/StepperComponent'
 import TooltipInfo from '@/components/TooltipInfo'
-import { createDid } from '@/app/api/Agent'
+import X509FormatNotice from './X509FormatNotice'
+import { getOrganizationById } from '@/app/api/organization'
 import { nanoid } from 'nanoid'
 
 const CreateDid = (): React.JSX.Element => {
@@ -49,6 +52,15 @@ const CreateDid = (): React.JSX.Element => {
   const [success, setSuccess] = useState<string | null>(null)
   const [domainValue, setDomainValue] = useState<string>('')
   const [domainError, setDomainError] = useState<string | null>(null)
+  const [agentDomainLocked, setAgentDomainLocked] = useState<boolean>(false)
+  const [checkingPublicEndpoint, setCheckingPublicEndpoint] =
+    useState<boolean>(false)
+  const [publicEndpointInput, setPublicEndpointInput] = useState<string>('')
+  const [publicEndpointError, setPublicEndpointError] = useState<string | null>(
+    null,
+  )
+  const [isSavingPublicEndpoint, setIsSavingPublicEndpoint] =
+    useState<boolean>(false)
   type Protocol = 'didcomm' | 'oid4vc'
   const [step, setStep] = useState(3)
 
@@ -63,6 +75,99 @@ const CreateDid = (): React.JSX.Element => {
     const generatedSeeds = nanoid(32)
     setSeeds(generatedSeeds)
   }, [])
+
+  // CREDEBL hosts did:web documents at this agent's configured *public*
+  // endpoint (see WellKnownController's /.well-known/did.json route) -
+  // that's the only domain this agent can actually serve a matching
+  // document at. This is deliberately publicAgentEndPoint, not
+  // agentEndPoint: the latter is the Docker-internal admin address used to
+  // configure the agent, and a did:web minted against it (e.g.
+  // did:web:172.17.0.1:8017) can never be resolved by anyone outside this
+  // host. Prefill and lock the field to the public endpoint once it's
+  // configured; otherwise prompt the user to configure it first.
+  useEffect(() => {
+    if (selectedDid !== 'did:web' || !orgId) {
+      return
+    }
+
+    let isCurrent = true
+    setCheckingPublicEndpoint(true)
+
+    const fetchPublicEndpoint = async (): Promise<void> => {
+      try {
+        const response = await getOrganizationById(orgId)
+        const { data } = response as AxiosResponse
+        const publicAgentEndPoint = data?.data?.org_agents?.[0]
+          ?.publicAgentEndPoint as string | undefined
+        const domain = publicAgentEndPoint
+          ?.replace(/^https?:\/\//, '')
+          .replace(/\/$/, '')
+
+        if (!isCurrent) {
+          return
+        }
+
+        if (domain) {
+          setDomainValue(domain)
+          setAgentDomainLocked(true)
+        } else {
+          setAgentDomainLocked(false)
+        }
+      } catch (error) {
+        console.error(
+          'Error fetching public agent endpoint for did:web domain:',
+          error,
+        )
+      } finally {
+        if (isCurrent) {
+          setCheckingPublicEndpoint(false)
+        }
+      }
+    }
+
+    fetchPublicEndpoint()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [selectedDid, orgId])
+
+  const handleSavePublicEndpoint = async (): Promise<void> => {
+    if (!orgId) {
+      return
+    }
+
+    const trimmed = publicEndpointInput.trim()
+    if (!trimmed) {
+      setPublicEndpointError('Public endpoint is required')
+      return
+    }
+
+    setPublicEndpointError(null)
+    setIsSavingPublicEndpoint(true)
+
+    try {
+      const res = await setPublicAgentEndpoint(orgId, trimmed)
+      const { data } = res as AxiosResponse
+
+      if (data?.statusCode === apiStatusCodes.API_STATUS_SUCCESS) {
+        const domain = trimmed.replace(/^https?:\/\//, '').replace(/\/$/, '')
+        setDomainValue(domain)
+        setAgentDomainLocked(true)
+      } else {
+        setPublicEndpointError(
+          data?.message || 'Failed to save public endpoint',
+        )
+      }
+    } catch (error) {
+      console.error('Error setting public agent endpoint:', error)
+      setPublicEndpointError(
+        'Something went wrong while saving the public endpoint',
+      )
+    } finally {
+      setIsSavingPublicEndpoint(false)
+    }
+  }
 
   const validateForm = (): boolean => {
     setDomainError(null)
@@ -215,7 +320,7 @@ const CreateDid = (): React.JSX.Element => {
               </div>
               <div className="mb-8 grid gap-4 md:grid-cols-2">
                 {protocolOptions.map((option) => {
-                  const isDisabled = option.id === 'oid4vc'
+                  const isDisabled = false
                   return (
                     <button
                       key={option.id}
@@ -298,7 +403,7 @@ const CreateDid = (): React.JSX.Element => {
                 </div>
               )}
 
-              {selectedProtocol === 'didcomm' && selectedOption && (
+              {selectedOption && didOptions.length > 0 && (
                 <div className="mt-6">
                   <label className="text-foreground mb-2 block text-sm font-medium">
                     Select DID Method{' '}
@@ -339,17 +444,35 @@ const CreateDid = (): React.JSX.Element => {
               )}
 
               {/* DID:web Domain Input */}
-              {selectedDid === 'did:web' && (
-                <SetDomainValueInput
-                  domainValue={domainValue}
-                  setDomainValue={handleDomainChange}
-                  domainError={domainError}
-                />
+              {selectedDid === 'did:web' && !checkingPublicEndpoint && (
+                <>
+                  {agentDomainLocked ? (
+                    <SetDomainValueInput
+                      domainValue={domainValue}
+                      setDomainValue={handleDomainChange}
+                      domainError={domainError}
+                      readOnly
+                    />
+                  ) : (
+                    <SetPublicEndpointPrompt
+                      publicEndpointInput={publicEndpointInput}
+                      setPublicEndpointInput={setPublicEndpointInput}
+                      publicEndpointError={publicEndpointError}
+                      isSavingPublicEndpoint={isSavingPublicEndpoint}
+                      onSave={handleSavePublicEndpoint}
+                    />
+                  )}
+                </>
               )}
+
+              {selectedProtocol === 'oid4vc' &&
+                selectedOption &&
+                didOptions.length === 0 && <X509FormatNotice />}
             </CardContent>
           </Card>
 
-          {(selectedDid === 'did:polygon:testnet' || selectedDid === 'did:polygon:mainnet') && (
+          {(selectedDid === 'did:polygon:testnet' ||
+            selectedDid === 'did:polygon:mainnet') && (
             <Card className="border-border mt-6 border shadow-sm">
               <CardHeader>
                 <CardTitle className="text-foreground text-lg font-semibold">
@@ -404,7 +527,10 @@ const CreateDid = (): React.JSX.Element => {
             <div className="mt-6 flex flex-col items-end">
               <Button
                 onClick={handleSubmit}
-                disabled={isApiInProgress}
+                disabled={
+                  isApiInProgress ||
+                  (selectedDid === 'did:web' && !agentDomainLocked)
+                }
                 className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg px-8 py-2 font-medium shadow-sm disabled:opacity-50"
               >
                 {isApiInProgress ? 'Creating DID...' : 'Create DID'}

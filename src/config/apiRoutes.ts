@@ -123,6 +123,7 @@ export const apiRoutes = {
     getAllSchemaFromPlatform: '/platform/schemas',
     getLedgers: '/platform/ledgers',
     getLedgerPlatformUrl: '/platform/network/url/',
+    ecosystemCreationInvitations: '/invitations',
   },
   Public: {
     organizations: '/orgs/public-profile',
@@ -136,9 +137,31 @@ export const apiRoutes = {
     createPolygonKeys: '/agents/polygon/create-keys',
     setAgentConfig: '/agents/configure',
     deleteWallet: '/agents/wallet',
+    publicEndpoint: '/agents/public-endpoint',
   },
 
   setting: {
     setting: '/client_credentials',
+  },
+
+  Oid4vcIssuance: {
+    issuers: '/oid4vc/issuers',
+    template: '/oid4vc',
+    templateSuffix: '/template',
+    createOfferSuffix: '/create-offer',
+    updateOfferSuffix: '/update-offer',
+    deleteOfferSuffix: '/delete-offer',
+    credentialOffer: '/oid4vc/credential-offer',
+    issuanceSessions: '/openid4vc/issuance-sessions',
+    revokeSuffix: '/revoke',
+  },
+
+  Oid4vcVerification: {
+    verifier: '/oid4vp/verifier',
+    verificationTemplate: '/oid4vp/verification-template',
+    presentation: '/oid4vp/presentation',
+    verifierPresentation: '/oid4vp/verifier-presentation',
+    verifierPresentationResponse: '/oid4vp/verifier-presentation-response',
+    verifyAuthorizationResponse: '/oid4vp/verify-authorization-response',
   },
 }
