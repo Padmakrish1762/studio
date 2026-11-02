@@ -30,6 +30,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { NavItem } from '../../../types'
 import { Organization } from '@/features/dashboard/type/organization'
+import { PlatformRoles } from '@/features/common/enum'
+import { apiRoutes } from '@/config/apiRoutes'
+import { axiosGet } from '@/services/apiRequests'
+import { getHeaderConfigs } from '@/config/GetHeaderConfigs'
 import { getOrganizations } from '@/app/api/organization'
 import { navItems } from '@/constants/data'
 import { setSidebarCollapsed } from '@/lib/sidebarSlice'
@@ -39,10 +43,11 @@ const APP_ENV =
   process.env.NEXT_PUBLIC_ACTIVE_THEME?.toLowerCase().trim() || 'credebl'
 
 const APP_CONFIG = {
+  // eslint-disable-next-line no-confusing-arrow
   logo: (theme: string, resolvedTheme: string): string =>
-    (resolvedTheme === 'dark'
+    resolvedTheme === 'dark'
       ? `/logos/${theme}_logo_dark.svg`
-      : `/logos/${theme}_logo.svg`),
+      : `/logos/${theme}_logo.svg`,
   collapsedLogo: (theme: string): string => `/favicons/favicon-${theme}.ico`,
   poweredBy: (theme: string): { src: string; alt: string } | null => {
     if (theme === 'credebl') {
@@ -141,6 +146,52 @@ export default function AppSidebar(): React.JSX.Element {
       })
     }
   }, [ecosystemEnableStatus])
+
+  // Platform admin is a global role (orgId: null in userOrgRoles), not tied
+  // to any org in the org list fetched above — so it needs its own check.
+  // This is the only entry point to /dashboard/settings; without it the
+  // page is unreachable via normal navigation (confirmed: SessionManager's
+  // post-login redirect always goes to /dashboard regardless of role).
+  useEffect(() => {
+    const addPlatformAdminNavItem = async (): Promise<void> => {
+      try {
+        const response = await axiosGet({
+          url: apiRoutes.users.userProfile,
+          config: getHeaderConfigs(),
+        })
+        const userOrgRoles = response?.data?.data?.userOrgRoles as
+          | { orgRole?: { name?: string } }[]
+          | undefined
+        const isPlatformAdmin = userOrgRoles?.some(
+          (item) => item.orgRole?.name === PlatformRoles.platformAdmin,
+        )
+
+        if (isPlatformAdmin) {
+          setManagedNavItem((prev) => {
+            const exists = prev.some(
+              (item) => item.url === '/dashboard/settings',
+            )
+            if (exists) {
+              return prev
+            }
+            const platformAdminMenu: NavItem = {
+              title: 'Invite Ecosystem Creator',
+              url: '/dashboard/settings',
+              icon: 'settings',
+              isActive: false,
+              items: [],
+            }
+            return [...prev, platformAdminMenu]
+          })
+        }
+      } catch (error) {
+        console.error('Error checking platform admin role:', error)
+      }
+    }
+
+    addPlatformAdminNavItem()
+  }, [])
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="group" data-collapsed>
