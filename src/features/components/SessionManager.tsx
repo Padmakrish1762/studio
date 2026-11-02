@@ -1,13 +1,13 @@
 'use client'
 
 import { setRefreshToken, setSessionId, setToken } from '@/lib/authSlice'
+import { useEffect, useRef } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import { apiRoutes } from '@/config/apiRoutes'
 import { generateAccessToken } from '@/utils/session'
 import { passwordValueEncryption } from '@/utils/passwordEncryption'
 import { useAppDispatch } from '@/lib/hooks'
-import { useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 
 const preventRedirectOnPaths = [
@@ -37,6 +37,7 @@ const excludeRouteForSessionCheck = [
   '/reset-password',
   '/sign-up',
   '/sign-in',
+  '/trust-registry',
 ]
 
 export const SessionManager = ({
@@ -54,6 +55,7 @@ export const SessionManager = ({
   const dispatch = useAppDispatch()
 
   const redirectTo = searchParams.get('redirectTo')
+  const hasCheckedOnMount = useRef(false)
 
   const setSessionDetails = (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,17 +113,34 @@ export const SessionManager = ({
     if (status === 'loading') {
       return
     }
+
+    const isIgnoreSessionCheck = excludeRouteForSessionCheck.some((page) =>
+      pathname.startsWith(page),
+    )
+
+    // On /sign-up and /sign-in, a session that was ALREADY present the
+    // moment this page loaded (e.g. a platform admin clicking an invite
+    // link meant for someone else, in the same logged-in browser tab) must
+    // not bounce you to /dashboard before the form ever shows - that's a
+    // stale session for a different flow, not a real sign-in here. A
+    // session that becomes authenticated WHILE already sitting on this
+    // page (i.e. the user just submitted the sign-in form) is the real
+    // thing and must still redirect - hasCheckedOnMount tells these apart.
+    if (isIgnoreSessionCheck && !hasCheckedOnMount.current) {
+      hasCheckedOnMount.current = true
+      return
+    }
+    hasCheckedOnMount.current = true
+
     setTimeout(() => {
       if (status === 'authenticated' && session?.sessionId) {
         fetchSessionDetails(session.sessionId, redirectTo)
         dispatch(setSessionId(session?.sessionId))
-      } else if (status === 'unauthenticated' || session === null) {
-        const isIgnoreSessionCheck = excludeRouteForSessionCheck.some((page) =>
-          pathname.startsWith(page),
-        )
-        if (!isIgnoreSessionCheck) {
-          router.push('/sign-in')
-        }
+      } else if (
+        !isIgnoreSessionCheck &&
+        (status === 'unauthenticated' || session === null)
+      ) {
+        router.push('/sign-in')
       }
     }, 500)
   }, [status, session])
