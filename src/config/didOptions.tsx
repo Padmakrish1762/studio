@@ -57,16 +57,30 @@ export const subOptionsMap = {
 
   oid4vc: [
     {
-      id: 'mdoc',
-      title: 'MDOC',
-      desc: 'Mobile Document (ISO/IEC 18013-5) via OID4VC.',
-      tooltip: 'MDOC follows ISO/IEC mobile identity standard.',
+      id: 'jwt_vc_json-ld',
+      title: 'W3C VC (JWT)',
+      desc: 'W3C Verifiable Credential, signed as a JWT, issued via OID4VC.',
+      tooltip:
+        'jwt_vc_json-ld: a standard JWT (header.payload.signature) whose payload carries a W3C VC envelope, verifiable with any JWT library.',
+    },
+    {
+      id: 'ldp_vc',
+      title: 'W3C VC (Linked Data Proof)',
+      desc: 'W3C Verifiable Credential with a Linked Data Proof, issued via OID4VC.',
+      tooltip:
+        'ldp_vc: a W3C Verifiable Credential signed with a JSON-LD Linked Data Proof rather than a JWT envelope.',
     },
     {
       id: 'sdjwt',
       title: 'SD-JWT',
       desc: 'Selective Disclosure JWT-based credentials for OID4VC.',
       tooltip: 'SD-JWT supports selective disclosure with JWT format.',
+    },
+    {
+      id: 'mdoc',
+      title: 'MDOC',
+      desc: 'Mobile Document (ISO/IEC 18013-5) via OID4VC.',
+      tooltip: 'MDOC follows ISO/IEC mobile identity standard.',
     },
   ],
 }
@@ -85,4 +99,15 @@ export const didOptionsMap: Record<string, string[]> = {
     'did:key',
     'did:web',
   ],
+
+  // OID4VC sub-option ids (see subOptionsMap.oid4vc above) were never
+  // mapped here, so picking "OID4VC" as the protocol led to an empty DID
+  // method dropdown — the only way to actually create a DID was to pick
+  // "DIDComm" instead, even for an OID4VC-only org. `mdoc` is intentionally
+  // left unmapped: the backend's template DTO rejects `signerOption: DID`
+  // for `mso_mdoc` (it requires an X.509 cert instead, configured under
+  // Trust -> x509), so there's no valid DID choice to offer there.
+  'jwt_vc_json-ld': ['did:key', 'did:web'],
+  ['ldp_vc']: ['did:key', 'did:web'],
+  sdjwt: ['did:key', 'did:web'],
 }

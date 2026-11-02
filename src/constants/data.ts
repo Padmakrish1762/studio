@@ -51,6 +51,27 @@ export const navItems: NavItem[] = [
     ],
   },
   {
+    title: 'OID4VC',
+    url: '#', // Placeholder as there is no direct link for the parent
+    icon: 'billing',
+    isActive: true,
+
+    items: [
+      {
+        title: 'Issuers',
+        shortcut: ['o', 'i'],
+        url: '/oid4vc-issuance/issuers',
+        icon: 'userPen',
+      },
+      {
+        title: 'Verifiers',
+        shortcut: ['o', 'v'],
+        url: '/oid4vc-verification/verifiers',
+        icon: 'login',
+      },
+    ],
+  },
+  {
     title: 'Trust',
     url: '#', // Placeholder as there is no direct link for the parent
     icon: 'billing',
